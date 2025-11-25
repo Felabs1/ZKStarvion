@@ -10,19 +10,13 @@ mod L2Messenger {
     use starknet::syscalls::send_message_to_l1_syscall;
 
     #[storage]
-    struct Storage {
-        l1_messenger_address: felt252,
-    }
+    struct Storage {}
 
-    #[constructor]
-    fn constructor(ref self: ContractState, l1_address: felt252) {
-        self.l1_messenger_address.write(l1_address);
-    }
 
     #[l1_handler]
     fn handle_ping(ref self: ContractState, from_address: felt252, value: felt252) {
         // Security check: Only allow messages from our specific L1 contract
-        let trusted_l1 = self.l1_messenger_address.read();
+        let trusted_l1: felt252 = 0xa0C2FE1AE408eA75C2f96B5048E7DAeDA6cBF4A9;
         assert(from_address == trusted_l1, 'Unauthorized L1 sender');
 
         // Logic: Add 1 to the value and send it back
