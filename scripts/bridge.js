@@ -5,7 +5,7 @@ const { ethers } = require("ethers");
 const L1_CORE_ADDRESS = "0xE2Bb56ee936fd6433DC0F6e7e3b8365C906AA057"; // Sepolia
 const L1_CONTRACT_ADDRESS = "0xa0C2FE1AE408eA75C2f96B5048E7DAeDA6cBF4A9";
 const L2_CONTRACT_ADDRESS =
-  "0x4a37af80b7fb97473ba1ee2771d6f5188eef809038396893dd14d85d827f3c1";
+  "0x12093a9e09c000e260a98e1e2b2a7a86848855064dd20bfd87badc7f7bf8b3b";
 const L2_FUNCTION_NAME = "handle_ping";
 
 async function main() {

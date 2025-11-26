@@ -1,33 +1,58 @@
 #[starknet::interface]
-trait IL2Messenger<TContractState> {
-    fn handle_ping(ref self: TContractState, from_address: felt252, value: felt252);
+trait IZcashBridge<TContractState> {
+    fn process_zcash_message(
+        ref self: TContractState,
+        zcash_tx_id: felt252,
+        payload: felt252,
+        signature: (felt252, felt252),
+    );
 }
 
 #[starknet::contract]
-mod L2Messenger {
-    use starknet::SyscallResultTrait;
-    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use starknet::syscalls::send_message_to_l1_syscall;
+mod ZcashBridge {
+    use core::ecdsa::check_ecdsa_signature;
+    use core::pedersen::pedersen;
+    use starknet::get_caller_address;
+    use starknet::storage::{
+        Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+    };
+
 
     #[storage]
-    struct Storage {}
+    struct Storage {
+        relayer_public_key: felt252,
+        processed_txs: Map<felt252, bool> // Prevent replay attacks
+    }
 
+    #[constructor]
+    fn constructor(ref self: ContractState, relayer_key: felt252) {
+        self.relayer_public_key.write(relayer_key);
+    }
 
-    #[l1_handler]
-    fn handle_ping(ref self: ContractState, from_address: felt252, value: felt252) {
-        // Security check: Only allow messages from our specific L1 contract
-        let trusted_l1: felt252 = 0xa0C2FE1AE408eA75C2f96B5048E7DAeDA6cBF4A9;
-        assert(from_address == trusted_l1, 'Unauthorized L1 sender');
+    #[external(v0)]
+    fn process_zcash_message(
+        ref self: ContractState,
+        zcash_tx_id: felt252,
+        payload: felt252,
+        signature: (felt252, felt252),
+    ) {
+        // 1. Check Replay: Ensure we haven't processed this Zcash Tx ID before
+        let is_processed = self.processed_txs.entry(zcash_tx_id).read();
+        assert(!is_processed, 'Tx already processed');
 
-        // Logic: Add 1 to the value and send it back
-        let value_to_return = value + 1;
+        // 2. Verify Signature: Ensure the message came from OUR Relayer
+        let relayer_key = self.relayer_public_key.read();
 
-        // Prepare payload for L1
-        let mut payload = ArrayTrait::new();
-        payload.append(value_to_return);
+        // We hash the data to verify the signature against it
+        let message_hash = pedersen(zcash_tx_id, payload); // Simplified hash for example
 
-        // 2. Send "Pong" message hash to L1
-        // Note: This does NOT execute on L1 automatically. It just stores the hash.
-        send_message_to_l1_syscall(trusted_l1, payload.span()).unwrap_syscall();
+        let (sig_r, sig_s) = signature;
+        let is_valid = check_ecdsa_signature(message_hash, relayer_key, sig_r, sig_s);
+        assert(is_valid, 'Invalid Relayer Signature');
+
+        // 3. Mark as processed
+        self.processed_txs.entry(zcash_tx_id).write(true);
+        // 4. EXECUTE LOGIC (e.g., mint tokens, update state)
+    // ... your logic here ...
     }
 }

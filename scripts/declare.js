@@ -10,7 +10,7 @@ const fs = require("fs");
 require("dotenv").config();
 const {
   sierra,
-} = require("../contracts/target/dev/contracts_L2Messenger.contract_class.json");
+} = require("../contracts/target/dev/contracts_ZCashBridge.contract_class.json");
 
 const providerSepoliaTestnetLavaPublic = new RpcProvider({
   nodeUrl: "https://rpc.starknet-testnet.lava.build/rpc/v0_9",
@@ -36,7 +36,7 @@ const account = new Account({
 const compiledSierra = json.parse(
   fs
     .readFileSync(
-      "../contracts/target/dev/contracts_L2Messenger.contract_class.json"
+      "../contracts/target/dev/contracts_ZCashBridge.contract_class.json"
     )
     .toString("ascii")
 );
@@ -44,7 +44,7 @@ const compiledSierra = json.parse(
 const compiledCasm = json.parse(
   fs
     .readFileSync(
-      "../contracts/target/dev/contracts_L2Messenger.compiled_contract_class.json"
+      "../contracts/target/dev/contracts_ZCashBridge.compiled_contract_class.json"
     )
     .toString("ascii")
 );
@@ -73,9 +73,12 @@ async function declare() {
 
 async function deploy() {
   const existing_class_hash =
-    "0xc24a578cbfc7165dcbea7f8f126736249bb55af6e8615b51f4e6056d7c7fd0";
+    "0x706367936e29d8774195bc9a4a1107d5ee277f5382c51ff126670faca7e1239";
   const deployResponse = await account.deployContract({
     classHash: existing_class_hash,
+    constructorCalldata: {
+      relayer_key: process.env["ZCASH_RELAYER_PUBLIC_KEY"],
+    },
   });
 
   await providerSepoliaTestnetLavaPublic.waitForTransaction(
