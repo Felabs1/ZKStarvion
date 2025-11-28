@@ -179,4 +179,7 @@ function parseMemo(hexMemo) {
 
 // Start Server
 setInterval(checkZcashNode, 5000);
-app.listen(3001, () => console.log("🔥 Server running on 3001"));
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});

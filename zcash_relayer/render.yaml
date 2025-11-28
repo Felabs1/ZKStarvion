@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: zcash-starknet-bridge
+    env: docker
+    plan: free
+    branch: main
+    # Render creates a PORT variable automatically
+    envVars:
+      - key: ZCASH_RELAYER_PRIVATE_KEY
+        sync: false # You will enter this manually in Dashboard
+      - key: ZCASH_RELAYER_ACCOUNT_ADDRESS
+        sync: false
+      - key: BRIDGE_CONTRACT_ADDRESS
+        sync: false
