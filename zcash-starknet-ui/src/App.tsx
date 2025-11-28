@@ -15,8 +15,8 @@ import {
 import starknet from "../assets/starknet.png";
 import zcash from "../assets/zcash.png";
 
-const API_URL = "http://localhost:3001";
-
+// const API_URL = "http://localhost:3001";
+const API_URL = "https://zkstarvion.onrender.com";
 function App() {
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);

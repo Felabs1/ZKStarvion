@@ -8,7 +8,6 @@ const {
   ec,
   CallData,
   ETransactionVersion,
-  defaultDeployer,
 } = require("starknet");
 const axios = require("axios");
 require("dotenv").config();
@@ -23,12 +22,21 @@ const ZCASH_RPC_URL = "http://127.0.0.1:18232";
 const RPC_USER = "hackathon";
 const RPC_PASS = "winner";
 
-const BRIDGE_Z_ADDRESS = process.env["BRIDGE_ADDR"];
-const USER_Z_ADDRESS = process.env["USER_ADDR"];
+// DETECT ENVIRONMENT: Are we on Render?
+// Render automatically sets the 'RENDER' env var to true
+const IS_CLOUD = process.env.RENDER === "true";
 
-const RELAYER_PRIVATE_KEY = process.env["ZCASH_RELAYER_PRIVATE_KEY"];
-const RELAYER_ADDRESS = process.env["ZCASH_RELAYER_ACCOUNT_ADDRESS"];
-const BRIDGE_CONTRACT = process.env["BRIDGE_CONTRACT_ADDRESS"];
+// SMART COMMAND BUILDER
+// If Cloud: Run 'zcash-cli' directly
+// If Laptop: Run 'docker exec ... zcash-cli'
+const BASE_CMD = IS_CLOUD
+  ? `zcash-cli -regtest -rpcuser=${RPC_USER} -rpcpassword=${RPC_PASS}`
+  : `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=${RPC_USER} -rpcpassword=${RPC_PASS}`;
+
+// STARKNET KEYS (From Environment)
+const RELAYER_PRIVATE_KEY = process.env.ZCASH_RELAYER_PRIVATE_KEY;
+const RELAYER_ADDRESS = process.env.ZCASH_RELAYER_ACCOUNT_ADDRESS;
+const BRIDGE_CONTRACT = process.env.BRIDGE_CONTRACT_ADDRESS;
 
 // ===================== STARKNET SETUP =====================
 const provider = new RpcProvider({
@@ -49,13 +57,23 @@ let bridgeHistory = [];
 
 app.post("/bridge", async (req, res) => {
   try {
+    // RE-FETCH ADDRESSES (In case they changed or loaded late)
+    const BRIDGE_Z_ADDRESS = process.env.BRIDGE_ADDR;
+    const USER_Z_ADDRESS = process.env.USER_Z_ADDRESS;
+
+    if (!BRIDGE_Z_ADDRESS || !USER_Z_ADDRESS) {
+      throw new Error("Addresses not found in Environment variables");
+    }
+
     const { amount } = req.body;
     console.log(`UI requested bridge: ${amount}`);
 
     const hexMemo = Buffer.from(amount.toString(), "utf8").toString("hex");
 
     // 1. Send Transaction
-    const cmd = `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_sendmany "${USER_Z_ADDRESS}" "[{\\"address\\": \\"${BRIDGE_Z_ADDRESS}\\", \\"amount\\": 0.001, \\"memo\\": \\"${hexMemo}\\"}]" 1 0.0001 "AllowRevealedAmounts"`;
+    // We use BASE_CMD which automatically adjusts for Cloud vs Laptop
+    const cmd = `${BASE_CMD} z_sendmany "${USER_Z_ADDRESS}" "[{\\"address\\": \\"${BRIDGE_Z_ADDRESS}\\", \\"amount\\": 0.001, \\"memo\\": \\"${hexMemo}\\"}]" 1 0.0001 "AllowRevealedAmounts"`;
+
     const { stdout: opidOutput } = await execPromise(cmd);
     const targetOpid = opidOutput.trim();
 
@@ -64,7 +82,7 @@ app.post("/bridge", async (req, res) => {
     // 2. Poll for Success
     let isReady = false;
     for (let i = 0; i < 20; i++) {
-      const statusCmd = `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_getoperationstatus`;
+      const statusCmd = `${BASE_CMD} z_getoperationstatus`;
       const { stdout: statusJson } = await execPromise(statusCmd);
       const operations = JSON.parse(statusJson);
       const myOp = operations.find((op) => op.id === targetOpid);
@@ -72,16 +90,16 @@ app.post("/bridge", async (req, res) => {
       if (myOp && myOp.status === "success") {
         isReady = true;
         break;
+      } else if (myOp && myOp.status === "failed") {
+        throw new Error(myOp.error.message);
       }
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     if (!isReady) throw new Error("Transaction timed out");
 
     // 3. Mine Block
-    await execPromise(
-      `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner generate 1`
-    );
+    await execPromise(`${BASE_CMD} generate 1`);
 
     res.json({ success: true, message: "Transaction Sent & Mined!" });
   } catch (e) {
@@ -94,9 +112,24 @@ app.get("/history", (req, res) => {
   res.json(bridgeHistory);
 });
 
+// Endpoint to check status and addresses
+app.get("/status", (req, res) => {
+  res.json({
+    online: true,
+    bridgeAddr: process.env.BRIDGE_ADDR || "Loading...",
+    userAddr: process.env.USER_Z_ADDRESS || "Loading...",
+  });
+});
+
 // ===================== WATCHER LOOP =====================
 async function checkZcashNode() {
   try {
+    const BRIDGE_Z_ADDRESS = process.env.BRIDGE_ADDR;
+    if (!BRIDGE_Z_ADDRESS) {
+      // console.log("Waiting for addresses...");
+      return;
+    }
+
     const response = await axios.post(
       ZCASH_RPC_URL,
       {
@@ -180,6 +213,4 @@ function parseMemo(hexMemo) {
 // Start Server
 setInterval(checkZcashNode, 5000);
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🔥 Server running on ${PORT}`));
