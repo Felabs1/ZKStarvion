@@ -140,6 +140,20 @@ app.post("/refill", async (req, res) => {
   }
 });
 
+// Endpoint E: Get Raw Zcash Transaction Details
+app.get("/zcash-tx/:txid", async (req, res) => {
+  try {
+    const { txid } = req.params;
+    // Ask the node for the raw transaction data
+    const cmd = `${BASE_CMD} gettransaction "${txid}"`;
+    const { stdout } = await execPromise(cmd);
+    res.json(JSON.parse(stdout));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Transaction not found on local node" });
+  }
+});
+
 app.get("/history", (req, res) => {
   res.json(bridgeHistory);
 });

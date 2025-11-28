@@ -8,9 +8,11 @@ import {
   CheckCircle,
   Clock,
   ArrowLeftRight,
+  Search,
 } from "lucide-react";
 import starknet from "../assets/starknet.png";
 import zcash from "../assets/zcash.png";
+import TransactionModal from "./TransactionModal";
 
 const API_URL = "https://zkstarvion.onrender.com";
 
@@ -34,6 +36,7 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTx, setSelectedTx] = useState(null); // <--- NEW STATE
 
   useEffect(() => {
     const interval = setInterval(fetchHistory, 2000);
@@ -49,6 +52,17 @@ function App() {
       setHistory(res.data.reverse());
     } catch (err) {
       console.error("Backend offline?", err);
+    }
+  };
+
+  // helper to fetch details
+  const viewZcashTx = async (txid: any) => {
+    try {
+      const res = await axios.get(`${API_URL}/zcash-tx/${txid}`);
+      setSelectedTx(res.data);
+    } catch (e) {
+      alert("Could not fetch details. Node might be syncing.");
+      console.log(e);
     }
   };
 
@@ -265,9 +279,17 @@ function App() {
                   {/* Details */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs bg-zinc-900/50 p-2 rounded border border-zinc-800/50">
-                      <span className="font-mono text-zinc-400 truncate w-48">
+                      {/* <span className="font-mono text-zinc-400 truncate w-48">
                         {tx.zcashTxId}
-                      </span>
+                      </span> */}
+                      <button
+                        onClick={() => viewZcashTx(tx.zcashTxId)}
+                        className="font-mono text-zinc-400 truncate w-32 md:w-48 hover:text-yellow-500 transition-colors text-left flex items-center gap-2 group/zlink"
+                        title="View Receipt"
+                      >
+                        {tx.zcashTxId}
+                        <Search className="w-3 h-3 opacity-0 group-hover/zlink:opacity-100 transition-opacity" />
+                      </button>
                       <span className="text-zinc-600 text-[10px]">Origin</span>
                     </div>
 
@@ -295,6 +317,15 @@ function App() {
           </div>
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {selectedTx && (
+          <TransactionModal
+            tx={selectedTx}
+            onClose={() => setSelectedTx(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
