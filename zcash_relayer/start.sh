@@ -1,7 +1,7 @@
 #!/bin/bash
 
-echo "🚀 Starting Zcash Node in Background..."
-# Start Zcashd with all the Regtest flags we figured out earlier
+# 1. Start Zcash in background
+echo "🚀 Starting Zcash Node..."
 zcashd -daemon \
   -regtest \
   -rpcuser=hackathon -rpcpassword=winner \
@@ -12,28 +12,34 @@ zcashd -daemon \
   -nuparams=f5b9230b:1 -nuparams=e9ff75a6:1 -nuparams=c2d6d0b4:1 \
   -allowdeprecated=z_getnewaddress -allowdeprecated=z_getbalance
 
-echo "⏳ Waiting 15s for Zcash to wake up..."
+echo "⏳ Waiting 15s for node initialization..."
 sleep 15
 
-echo "🔑 Creating Cloud Wallets..."
-# Generate addresses
-BRIDGE=$(zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_getnewaddress)
-USER=$(zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_getnewaddress)
+# 2. GENERATE NEW ADDRESSES
+# We run the command and save the text output into a variable
+RAW_BRIDGE=$(zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_getnewaddress)
+RAW_USER=$(zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_getnewaddress)
 
-echo "   Bridge: $BRIDGE"
-echo "   User:   $USER"
+# Trim any whitespace
+BRIDGE_ADDR=$(echo "$RAW_BRIDGE" | xargs)
+USER_Z_ADDRESS=$(echo "$RAW_USER" | xargs)
 
-# Export them as ENV variables so Node.js can read them
-export BRIDGE_ADDR=$BRIDGE
-export USER_Z_ADDRESS=$USER
+echo "✅ Generated Addresses:"
+echo "   Bridge: $BRIDGE_ADDR"
+echo "   User:   $USER_Z_ADDRESS"
 
-echo "⛏️  Mining Initial Funds (101 Blocks)..."
+# 3. EXPORT AS ENVIRONMENT VARIABLES
+# This makes them visible to the Node.js script below
+export BRIDGE_ADDR=$BRIDGE_ADDR
+export USER_Z_ADDRESS=$USER_Z_ADDRESS
+
+# 4. MINE & FUND
+echo "⛏️  Mining Funds..."
 zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner generate 101 > /dev/null
-
-echo "💸 Funding User Account..."
-zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_shieldcoinbase "*" "$USER"
+zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_shieldcoinbase "*" "$USER_Z_ADDRESS"
 zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner generate 1 > /dev/null
 
-echo "✅ Cloud Node Ready! Starting API Server..."
-# Start your Node.js server
+# 5. START NODE.JS
+# Because we exported the variables above, server.js can now read them!
+echo "🚀 Starting Relayer..."
 node server.js

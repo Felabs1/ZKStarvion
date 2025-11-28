@@ -24,7 +24,7 @@ const RPC_USER = "hackathon";
 const RPC_PASS = "winner";
 
 const BRIDGE_Z_ADDRESS = process.env["BRIDGE_ADDR"];
-const USER_Z_ADDRESS = process.env["USER_Z_ADDRESS"];
+const USER_Z_ADDRESS = process.env["USER_ADDR"];
 
 const RELAYER_PRIVATE_KEY = process.env["ZCASH_RELAYER_PRIVATE_KEY"];
 const RELAYER_ADDRESS = process.env["ZCASH_RELAYER_ACCOUNT_ADDRESS"];
