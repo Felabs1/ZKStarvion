@@ -1,33 +1,44 @@
-# Start with the official Zcash image (Debian-based)
+# Start with the official Zcash image
 FROM electriccoinco/zcashd:latest
 
-# Switch to root to install Node.js
+# Switch to root to install Node.js and manage files
 USER root
 
-# 1. Install Node.js and tools
+# 1. Install Node.js 22 (Fixes the Starknet warning)
+# Changed setup_18.x -> setup_22.x
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean
 
-# 2. Setup App Directory
+# 2. Fix the Zcash Directory Crash
+# We manually create the config folder so Zcash doesn't fail when trying to touch the config file
+RUN mkdir -p /root/.zcash && touch /root/.zcash/zcash.conf
+
+# 3. Setup App Directory
 WORKDIR /app
 
-# 3. Copy your project files
+# 4. Copy Dependencies first (Better caching)
 COPY package.json .
-COPY server.js .
 
-# 4. Install Node dependencies
+# 5. Install Node dependencies
 RUN npm install
 
-# 5. Copy the Startup Script (We will create this next)
+# 6. Copy the rest of the app
+COPY server.js .
 COPY start.sh .
+
+# 7. Make script executable
 RUN chmod +x start.sh
 
-# 6. Expose the API Port
+# 8. Reset Entrypoint
+# This is CRITICAL. It stops the base image from running its own broken setup script.
+ENTRYPOINT []
+
+# 9. Expose the API Port
 EXPOSE 3001
 
-# 7. Run the startup script
+# 10. Run your startup script
 CMD ["./start.sh"]
