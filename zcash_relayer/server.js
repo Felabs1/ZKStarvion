@@ -108,6 +108,38 @@ app.post("/bridge", async (req, res) => {
   }
 });
 
+// Endpoint D: Emergency Refill (The Fix)
+app.post("/refill", async (req, res) => {
+  try {
+    console.log("⛽ Manual Refill Requested...");
+
+    // 1. Check if we have addresses loaded
+    const USER = process.env.USER_Z_ADDRESS;
+    if (!USER) throw new Error("User address not found in ENV");
+
+    // 2. Mine 101 Blocks (Unlock Coinbase)
+    console.log("⛏️ Mining 101 blocks...");
+    await execPromise(`${BASE_CMD} generate 101`);
+
+    // 3. Shield Funds to User
+    console.log(`💸 Moving funds to ${USER}...`);
+    // We use "*" to grab ANY mined coins
+    await execPromise(`${BASE_CMD} z_shieldcoinbase "*" "${USER}"`);
+
+    // 4. Mine 1 block to confirm
+    console.log("⛏️ Mining confirmation block...");
+    await execPromise(`${BASE_CMD} generate 1`);
+
+    res.json({
+      success: true,
+      message: "Wallet Refilled! Try bridging again.",
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/history", (req, res) => {
   res.json(bridgeHistory);
 });
