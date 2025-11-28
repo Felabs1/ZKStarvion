@@ -1,60 +1,96 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
-  Shield,
-  Zap,
   ExternalLink,
   Activity,
   CheckCircle,
   Clock,
   ArrowLeftRight,
-  Hash,
 } from "lucide-react";
 import starknet from "../assets/starknet.png";
 import zcash from "../assets/zcash.png";
 
-// const API_URL = "http://localhost:3001";
 const API_URL = "https://zkstarvion.onrender.com";
+
+// ----------------------
+// TYPES
+// ----------------------
+interface HistoryItem {
+  amount: number;
+  status: string;
+  zcashTxId: string;
+  starknetTxId?: string | null;
+}
+
+type BridgeResponse = {
+  success: boolean;
+  message?: string;
+};
+
 function App() {
-  const [amount, setAmount] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [error, setError] = useState(null);
+  const [amount, setAmount] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const interval = setInterval(fetchHistory, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchHistory = async () => {
+  // ----------------------
+  // FETCH HISTORY (TYPED)
+  // ----------------------
+  const fetchHistory = async (): Promise<void> => {
     try {
-      const res = await axios.get(`${API_URL}/history`);
+      const res = await axios.get<HistoryItem[]>(`${API_URL}/history`);
       setHistory(res.data.reverse());
     } catch (err) {
       console.error("Backend offline?", err);
     }
   };
 
-  const handleBridge = async () => {
+  // ----------------------
+  // HANDLE BRIDGE (TYPED)
+  // ----------------------
+  const handleBridge = async (): Promise<void> => {
     if (!amount) return;
+
     setIsLoading(true);
     setError(null);
+
     try {
-      await axios.post(`${API_URL}/bridge`, { amount });
+      const response = await axios.post<BridgeResponse>(`${API_URL}/bridge`, {
+        amount: Number(amount),
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || "Bridge failed");
+      }
+
       setAmount("");
       fetchHistory();
-    } catch (err) {
-      setError("Failed to broadcast. Check server console.");
+    } catch (error: unknown) {
+      const axiosErr = error as AxiosError;
+
+      setError(
+        axiosErr.response?.data
+          ? "Failed to broadcast. Server responded with an error."
+          : "Failed to broadcast. Check server console."
+      );
     } finally {
       setTimeout(() => setIsLoading(false), 1500);
     }
   };
 
+  // ----------------------
+  // RETURN JSX
+  // ----------------------
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 font-sans bg-zinc-950 text-zinc-200">
-      {/* --- HEADER SECTION --- */}
+      {/* HEADER */}
       <div className="w-full max-w-6xl mb-12 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-700 rounded-xl flex items-center justify-center shadow-lg shadow-yellow-500/20">
@@ -70,35 +106,27 @@ function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-            </span>
-            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-              System Operational
-            </span>
-          </div>
+        <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+          </span>
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+            System Operational
+          </span>
         </div>
       </div>
 
       <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* LEFT PANEL: ZCASH (SENDER) */}
+        {/* LEFT: BRIDGE FORM */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden group"
+          className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 rounded-3xl p-8 shadow-2xl"
         >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl -mr-32 -mt-32 transition-opacity group-hover:opacity-100 opacity-50"></div>
-
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
-              <img
-                src={zcash}
-                alt="zcash"
-                className="w-10 h-10 object-contain"
-              />
+              <img src={zcash} alt="zcash" className="w-10 h-10" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Zcash Shielded</h2>
@@ -108,18 +136,21 @@ function App() {
             </div>
           </div>
 
-          <div className="space-y-6 relative z-10">
-            <div className="bg-black/40 p-6 rounded-2xl border border-zinc-800 focus-within:border-yellow-500/50 transition-colors">
-              <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block tracking-wider">
+          <div className="space-y-6">
+            <div className="bg-black/40 p-6 rounded-2xl border border-zinc-800">
+              <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">
                 Amount to Bridge
               </label>
+
               <div className="flex items-baseline gap-2">
                 <input
                   type="number"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setAmount(e.target.value)
+                  }
                   placeholder="0.00"
-                  className="bg-transparent text-5xl font-bold text-white placeholder-zinc-800 outline-none w-full font-mono"
+                  className="bg-transparent text-5xl font-bold text-white outline-none w-full font-mono"
                 />
                 <span className="text-xl font-bold text-yellow-500/50">
                   ZEC
@@ -136,12 +167,11 @@ function App() {
             <button
               onClick={handleBridge}
               disabled={isLoading || !amount}
-              className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all
-                ${
-                  isLoading
-                    ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black shadow-lg shadow-yellow-900/20"
-                }`}
+              className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${
+                isLoading
+                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-yellow-500 to-yellow-600 text-black shadow-lg"
+              }`}
             >
               {isLoading ? (
                 <>
@@ -156,22 +186,16 @@ function App() {
           </div>
         </motion.div>
 
-        {/* RIGHT PANEL: STARKNET (HISTORY) */}
+        {/* RIGHT: HISTORY */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden"
+          className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 rounded-3xl p-8 shadow-2xl"
         >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -mr-32 -mt-32 opacity-50"></div>
-
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-              <img
-                src={starknet}
-                alt="starknet"
-                className="w-10 h-10 object-contain"
-              />
+              <img src={starknet} alt="starknet" className="w-10 h-10" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Starknet Sepolia</h2>
@@ -181,7 +205,7 @@ function App() {
             </div>
           </div>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar relative z-10">
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
             <AnimatePresence>
               {history.length === 0 && (
                 <motion.div
@@ -203,9 +227,8 @@ function App() {
                   key={tx.zcashTxId || idx}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="bg-black/20 rounded-xl p-4 border border-zinc-800/50 hover:border-zinc-700 transition-colors"
+                  className="bg-black/20 rounded-xl p-4 border border-zinc-800/50"
                 >
-                  {/* Status Header */}
                   <div className="flex justify-between items-start mb-3 border-b border-zinc-800 pb-2">
                     <div className="flex items-center gap-3">
                       <div
@@ -221,6 +244,7 @@ function App() {
                           <Clock className="w-4 h-4" />
                         )}
                       </div>
+
                       <div>
                         <div className="font-bold text-white text-md">
                           Mint {tx.amount} Tokens
@@ -238,44 +262,29 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Transaction Details */}
+                  {/* Details */}
                   <div className="space-y-2">
-                    {/* Zcash Tx Row */}
                     <div className="flex items-center justify-between text-xs bg-zinc-900/50 p-2 rounded border border-zinc-800/50">
-                      <div className="flex items-center gap-2">
-                        <span className="text-yellow-600 font-semibold flex items-center gap-1">
-                          ZEC
-                        </span>
-                        <span
-                          className="font-mono text-zinc-400 truncate w-32 md:w-48"
-                          title={tx.zcashTxId}
-                        >
-                          {tx.zcashTxId}
-                        </span>
-                      </div>
+                      <span className="font-mono text-zinc-400 truncate w-48">
+                        {tx.zcashTxId}
+                      </span>
                       <span className="text-zinc-600 text-[10px]">Origin</span>
                     </div>
 
-                    {/* Starknet Tx Row */}
                     {tx.starknetTxId ? (
                       <a
                         href={`https://sepolia.starkscan.co/tx/${tx.starknetTxId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-between text-xs bg-blue-900/10 p-2 rounded border border-blue-500/20 hover:bg-blue-900/20 transition-colors group/link cursor-pointer"
+                        className="flex items-center justify-between text-xs bg-blue-900/10 p-2 rounded border border-blue-500/20"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-blue-500 font-semibold flex items-center gap-1">
-                            STRK
-                          </span>
-                          <span className="font-mono text-blue-200 truncate w-32 md:w-48">
-                            {tx.starknetTxId}
-                          </span>
-                        </div>
+                        <span className="font-mono text-blue-200 truncate w-48">
+                          {tx.starknetTxId}
+                        </span>
                         <ExternalLink className="w-3 h-3 text-blue-500" />
                       </a>
                     ) : (
-                      <div className="flex items-center justify-between text-xs bg-zinc-900/30 p-2 rounded border border-zinc-800/30 opacity-50">
+                      <div className="text-xs bg-zinc-900/30 p-2 rounded border border-zinc-800/30 opacity-50">
                         <span className="text-zinc-600">Pending L2...</span>
                       </div>
                     )}
