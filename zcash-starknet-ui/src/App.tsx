@@ -295,7 +295,7 @@ function App() {
 
                     {tx.starknetTxId ? (
                       <a
-                        href={`https://sepolia.starkscan.co/tx/${tx.starknetTxId}`}
+                        href={`https://sepolia.voyager.online/tx/${tx.starknetTxId}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-between text-xs bg-blue-900/10 p-2 rounded border border-blue-500/20"

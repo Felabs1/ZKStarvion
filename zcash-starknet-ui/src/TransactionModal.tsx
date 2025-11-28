@@ -19,6 +19,7 @@ interface TransactionModalProps {
 
 const TransactionModal: React.FC<TransactionModalProps> = ({ tx, onClose }) => {
   if (!tx) return null;
+  console.log("zcash transaction ", tx);
 
   return (
     <div
