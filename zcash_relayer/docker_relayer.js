@@ -199,7 +199,7 @@ const RPC_USER = "hackathon";
 const RPC_PASS = "winner";
 
 const BRIDGE_Z_ADDRESS = process.env["BRIDGE_ADDR"];
-const USER_Z_ADDRESS = process.env["USER_Z_ADDRESS"]; // <--- NEW: Needed for sending from UI
+const USER_Z_ADDRESS = process.env["USER_ADDR"]; // <--- NEW: Needed for sending from UI
 
 const RELAYER_PRIVATE_KEY = process.env["ZCASH_RELAYER_PRIVATE_KEY"];
 const RELAYER_ADDRESS = process.env["ZCASH_RELAYER_ACCOUNT_ADDRESS"];
@@ -233,21 +233,50 @@ app.post("/bridge", async (req, res) => {
     const { amount } = req.body;
     console.log(`UI requested bridge: ${amount}`);
 
-    // Convert amount string to Hex Memo
     const hexMemo = Buffer.from(amount.toString(), "utf8").toString("hex");
 
-    // Docker Command to send Zcash
-    // We send 0.001 ZEC fixed, but the Memo contains the real requested amount
+    // 1. Send the Transaction
     const cmd = `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_sendmany "${USER_Z_ADDRESS}" "[{\\"address\\": \\"${BRIDGE_Z_ADDRESS}\\", \\"amount\\": 0.001, \\"memo\\": \\"${hexMemo}\\"}]" 1 0.0001 "AllowRevealedAmounts"`;
 
-    await execPromise(cmd);
+    const { stdout: opidOutput } = await execPromise(cmd);
+    const targetOpid = opidOutput.trim(); // e.g., "opid-123..."
 
-    // Mine immediately for instant UX
+    console.log(`⏳ Waiting for ZK Proof (ID: ${targetOpid})...`);
+
+    let isReady = false;
+
+    // 2. Poll Status (FIXED: No arguments passed to z_getoperationstatus)
+    for (let i = 0; i < 20; i++) {
+      // We ask for ALL operations to avoid JSON escaping issues in the shell
+      const statusCmd = `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner z_getoperationstatus`;
+
+      const { stdout: statusJson } = await execPromise(statusCmd);
+      const operations = JSON.parse(statusJson);
+
+      // Find OUR specific operation in the list
+      const myOp = operations.find((op) => op.id === targetOpid);
+
+      if (myOp) {
+        if (myOp.status === "success") {
+          isReady = true;
+          break;
+        } else if (myOp.status === "failed") {
+          console.error("Zcash Op Failed:", myOp.error);
+          throw new Error(myOp.error.message);
+        }
+      }
+      await new Promise((r) => setTimeout(r, 500)); // Wait 0.5s
+    }
+
+    if (!isReady) throw new Error("Transaction timed out generating proofs");
+
+    // 3. Mine the Block
+    console.log("⛏️ Mining block...");
     await execPromise(
       `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=hackathon -rpcpassword=winner generate 1`
     );
 
-    res.json({ success: true });
+    res.json({ success: true, message: "Transaction Sent & Mined!" });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
