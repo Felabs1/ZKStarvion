@@ -12,7 +12,6 @@ trait IZcashBridge<TContractState> {
 mod ZcashBridge {
     use core::ecdsa::check_ecdsa_signature;
     use core::pedersen::pedersen;
-    use starknet::get_caller_address;
     use starknet::storage::{
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
     };

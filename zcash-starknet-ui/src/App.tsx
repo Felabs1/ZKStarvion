@@ -14,7 +14,10 @@ import starknet from "../assets/starknet.png";
 import zcash from "../assets/zcash.png";
 import TransactionModal from "./TransactionModal";
 
-const API_URL = "https://zkstarvion.onrender.com";
+const API_URL =
+  window.location.hostname === "localhost"
+    ? "http://localhost:3001"
+    : "https://zkstarvion.onrender.com";
 
 // ----------------------
 // TYPES
