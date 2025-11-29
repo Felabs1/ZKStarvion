@@ -162,6 +162,14 @@ NC='\033[0m'
 
 echo -e "${BLUE}🚀 Initializing Offline Environment...${NC}\n"
 
+echo -e "${BLUE}
+  ______  ______  _                   _             
+|__  / |/ / ___|| |_ __ _ _ ____   _(_) ___  _ __  
+  / /| ' /\\___ \\| __/ _\` | '__\\ \\ / / |/ _ \\| '_ \\ 
+ / /_| . \\ ___) | || (_| | |   \\ V /| | (_) | | | |
+/____|_|\\_\\____/ \\__\\__,_|_|    \\_/ |_|\\___/|_| |_|
+${NC}"
+
 # 1. PREREQUISITE CHECK
 if ! command -v docker &> /dev/null; then echo -e "${RED}❌ Docker missing.${NC}"; exit 1; fi
 if ! command -v scarb &> /dev/null; then echo -e "${RED}❌ Scarb missing.${NC}"; exit 1; fi
