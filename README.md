@@ -27,6 +27,12 @@ It allows a user to trigger execution on Starknet by sending a **Shielded Zcash 
 
 ## 🏗️ Architecture
 
+<details>
+  <summary><strong>Click to view Technical Architecture Diagram</strong></summary>
+
+<img width="2816" height="1536" alt="architecture" src="https://github.com/user-attachments/assets/74976017-3283-4f0d-b58d-42fde522a3bb" />
+</details>
+
 The system consists of three core components:
 
 1.  **The Listener (Zcash Core Node):**
