@@ -157,4 +157,4 @@ We use the official electriccoinco/zcashd image with custom regtest flags to sim
 
 This project was built for the Starknet <-> Privacy Hackathon track.
 
-Team: [Felix Awere]
+Team: [Felix Awere, Peter Kagwe, Ted Adams]
