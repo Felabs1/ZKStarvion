@@ -23,12 +23,9 @@ const RPC_USER = "hackathon";
 const RPC_PASS = "winner";
 
 // DETECT ENVIRONMENT: Are we on Render?
-// Render automatically sets the 'RENDER' env var to true
 const IS_CLOUD = process.env.RENDER === "true";
 
 // SMART COMMAND BUILDER
-// If Cloud: Run 'zcash-cli' directly
-// If Laptop: Run 'docker exec ... zcash-cli'
 const BASE_CMD = IS_CLOUD
   ? `zcash-cli -regtest -rpcuser=${RPC_USER} -rpcpassword=${RPC_PASS}`
   : `docker exec zcash-hackathon zcash-cli -regtest -rpcuser=${RPC_USER} -rpcpassword=${RPC_PASS}`;
@@ -57,7 +54,6 @@ let bridgeHistory = [];
 
 app.post("/bridge", async (req, res) => {
   try {
-    // RE-FETCH ADDRESSES (In case they changed or loaded late)
     const BRIDGE_Z_ADDRESS = process.env.BRIDGE_ADDR;
     const USER_Z_ADDRESS = process.env.USER_Z_ADDRESS;
 
@@ -65,13 +61,14 @@ app.post("/bridge", async (req, res) => {
       throw new Error("Addresses not found in Environment variables");
     }
 
-    const { amount } = req.body;
-    console.log(`UI requested bridge: ${amount}`);
+    const { amount, recipient } = req.body;
+    console.log(`UI requested bridge: ${amount} to ${recipient}`);
 
-    const hexMemo = Buffer.from(amount.toString(), "utf8").toString("hex");
+    // Create the combined memo: "0x123...:100"
+    const rawMemo = `${recipient}:${amount}`;
+    const hexMemo = Buffer.from(rawMemo, "utf8").toString("hex");
 
     // 1. Send Transaction
-    // We use BASE_CMD which automatically adjusts for Cloud vs Laptop
     const cmd = `${BASE_CMD} z_sendmany "${USER_Z_ADDRESS}" "[{\\"address\\": \\"${BRIDGE_Z_ADDRESS}\\", \\"amount\\": 0.001, \\"memo\\": \\"${hexMemo}\\"}]" 1 0.0001 "AllowRevealedAmounts"`;
 
     const { stdout: opidOutput } = await execPromise(cmd);
@@ -108,25 +105,19 @@ app.post("/bridge", async (req, res) => {
   }
 });
 
-// Endpoint D: Emergency Refill (The Fix)
+// Endpoint D: Emergency Refill
 app.post("/refill", async (req, res) => {
   try {
     console.log("⛽ Manual Refill Requested...");
-
-    // 1. Check if we have addresses loaded
     const USER = process.env.USER_Z_ADDRESS;
     if (!USER) throw new Error("User address not found in ENV");
 
-    // 2. Mine 101 Blocks (Unlock Coinbase)
     console.log("⛏️ Mining 101 blocks...");
     await execPromise(`${BASE_CMD} generate 101`);
 
-    // 3. Shield Funds to User
     console.log(`💸 Moving funds to ${USER}...`);
-    // We use "*" to grab ANY mined coins
     await execPromise(`${BASE_CMD} z_shieldcoinbase "*" "${USER}"`);
 
-    // 4. Mine 1 block to confirm
     console.log("⛏️ Mining confirmation block...");
     await execPromise(`${BASE_CMD} generate 1`);
 
@@ -144,7 +135,6 @@ app.post("/refill", async (req, res) => {
 app.get("/zcash-tx/:txid", async (req, res) => {
   try {
     const { txid } = req.params;
-    // Ask the node for the raw transaction data
     const cmd = `${BASE_CMD} gettransaction "${txid}"`;
     const { stdout } = await execPromise(cmd);
     res.json(JSON.parse(stdout));
@@ -158,7 +148,6 @@ app.get("/history", (req, res) => {
   res.json(bridgeHistory);
 });
 
-// Endpoint to check status and addresses
 app.get("/status", (req, res) => {
   res.json({
     online: true,
@@ -171,10 +160,7 @@ app.get("/status", (req, res) => {
 async function checkZcashNode() {
   try {
     const BRIDGE_Z_ADDRESS = process.env.BRIDGE_ADDR;
-    if (!BRIDGE_Z_ADDRESS) {
-      // console.log("Waiting for addresses...");
-      return;
-    }
+    if (!BRIDGE_Z_ADDRESS) return;
 
     const response = await axios.post(
       ZCASH_RPC_URL,
@@ -193,20 +179,30 @@ async function checkZcashNode() {
       if (processedTxs.has(tx.txid)) continue;
 
       const memoString = parseMemo(tx.memo);
-      if (memoString) {
+      // Check for the "Address:Amount" format
+      if (memoString && memoString.includes(":")) {
+        const [recipientAddr, amountStr] = memoString.split(":");
+
         console.log(`⚡ Found Request: ${memoString} (Tx: ${tx.txid})`);
+        console.log(`⚡ bridging ${amountStr} ZEC to ${recipientAddr}`);
+
         processedTxs.add(tx.txid);
 
         const historyItem = {
           zcashTxId: tx.txid,
-          amount: memoString,
+          amount: amountStr, // Store just the amount for display
+          recipient: recipientAddr,
           status: "Relaying...",
           starknetTxId: null,
         };
         bridgeHistory.push(historyItem);
 
         try {
-          const starknetHash = await relayToStarknet(tx.txid, memoString);
+          const starknetHash = await relayToStarknet(
+            tx.txid,
+            recipientAddr,
+            amountStr
+          );
           const index = bridgeHistory.findIndex((h) => h.zcashTxId === tx.txid);
           if (index !== -1) {
             bridgeHistory[index].status = "Bridged ✅";
@@ -222,22 +218,70 @@ async function checkZcashNode() {
   }
 }
 
-async function relayToStarknet(zcashTxIdHex, payloadStr) {
-  const cleanPayload = payloadStr.toString().replace(/[^0-9]/g, "");
-  if (!cleanPayload) return;
+// === HELPER: Convert "10.5" to BigInt (10500000000000000000) ===
+function parseTo18Decimals(str) {
+  try {
+    // 1. Remove any non-numeric chars except dot
+    let clean = str.toString().replace(/[^0-9.]/g, "");
+
+    // 2. Split into integer and fraction
+    const parts = clean.split(".");
+    let integerPart = parts[0];
+    let fractionalPart = parts[1] || "";
+
+    // 3. Pad fraction to 18 digits
+    // e.g. "5" becomes "500000000000000000"
+    while (fractionalPart.length < 18) {
+      fractionalPart += "0";
+    }
+
+    // 4. Truncate if too long (more than 18 decimals)
+    if (fractionalPart.length > 18) {
+      fractionalPart = fractionalPart.substring(0, 18);
+    }
+
+    // 5. Combine: "10" + "500..." -> "10500..."
+    return BigInt(integerPart + fractionalPart);
+  } catch (e) {
+    console.error("Error parsing amount:", str);
+    return 0n;
+  }
+}
+
+async function relayToStarknet(zcashTxIdHex, recipientAddr, amountStr) {
+  // 1. CLEANUP
+  const amount = amountStr.toString().replace(/[^0-9]/g, "");
+  const cleanAmount = parseTo18Decimals(amount);
+
+  if (!cleanAmount) return;
 
   const zcashTxFelt = BigInt("0x" + zcashTxIdHex.substring(0, 62));
-  const payloadFelt = BigInt(cleanPayload);
-  const msgHash = ec.starkCurve.pedersen(zcashTxFelt, payloadFelt);
+  const recipientFelt = BigInt(recipientAddr); // Convert Starknet address to BigInt
+  const amountFelt = BigInt(cleanAmount);
+
+  if (amountFelt === 0n) {
+    console.log("Skipping zero value transaction");
+    return;
+  }
+  // 2. HASH CHAIN (Must match Cairo Logic: hash(hash(tx, recipient), amount))
+  // H(TxID, Recipient)
+  const hashTmp = ec.starkCurve.pedersen(zcashTxFelt, recipientFelt);
+  // H(Result, Amount)
+  const msgHash = ec.starkCurve.pedersen(hashTmp, amountFelt);
+
+  // 3. SIGN
   const signature = ec.starkCurve.sign(msgHash, RELAYER_PRIVATE_KEY);
 
   console.log(`📨 Relaying to Starknet...`);
+
+  // 4. EXECUTE
   const { transaction_hash } = await account.execute({
     contractAddress: BRIDGE_CONTRACT,
     entrypoint: "process_zcash_message",
     calldata: CallData.compile([
       zcashTxFelt.toString(),
-      payloadFelt.toString(),
+      recipientFelt.toString(), // <--- Pass Recipient
+      amountFelt.toString(), // <--- Pass Amount
       signature.r.toString(),
       signature.s.toString(),
     ]),
