@@ -303,7 +303,7 @@ function App() {
 
                       <div>
                         <div className="font-bold text-white text-md">
-                          Mint {tx.amount} Tokens
+                          {`Mint ${tx.amount} Tokens`}
                         </div>
                         <div
                           className={`text-xs font-medium ${
