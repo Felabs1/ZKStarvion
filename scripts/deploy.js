@@ -18,7 +18,8 @@ async function main() {
 
   // ================= 1. CONFIGURATION =================
   const provider = new RpcProvider({
-    nodeUrl: "https://rpc.starknet-testnet.lava.build/rpc/v0_9",
+    nodeUrl:
+      "https://lively-greatest-yard.strk-sepolia.quiknode.pro/89fd5a884f057160319ddc9618bcbf953a43cbcd/rpc/v0_8",
   });
 
   // Load Keys (Using the standardized names from your setup script)

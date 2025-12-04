@@ -37,7 +37,8 @@ const BRIDGE_CONTRACT = process.env.BRIDGE_CONTRACT_ADDRESS;
 
 // ===================== STARKNET SETUP =====================
 const provider = new RpcProvider({
-  nodeUrl: "https://rpc.starknet-testnet.lava.build/rpc/v0_9",
+  nodeUrl:
+    "https://lively-greatest-yard.strk-sepolia.quiknode.pro/89fd5a884f057160319ddc9618bcbf953a43cbcd/rpc/v0_8",
 });
 const account = new Account({
   provider,
